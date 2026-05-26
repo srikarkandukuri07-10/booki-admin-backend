@@ -1,0 +1,100 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String   // Hashed password
+  name      String
+  role      String   @default("ADMIN") // For future multi-restaurant / staff expansion
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("admins")
+}
+
+model MenuCategory {
+  id        String     @id @default(uuid())
+  name      String     @unique // e.g., Starters, Main Course, Biryani, Desserts, Drinks
+  items     MenuItem[]
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  @@map("menu_categories")
+}
+
+model MenuItem {
+  id           String             @id @default(uuid())
+  name         String
+  description  String?
+  image        String?            // URL or file path of the food item image
+  price        Float
+  veg          Boolean            @default(true) // true = Veg, false = Non-Veg
+  availability Boolean            @default(true) // Enable/Disable availability
+  categoryId   String             @map("category_id")
+  category     MenuCategory       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  orderItems   OrderItem[]
+  feedbacks    CustomerFeedback[]
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  @@map("menu_items")
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  tableNumber String      @map("table_number")
+  notes       String?     // Customer customization notes
+  status      OrderStatus @default(NEW)
+  total       Float
+  items       OrderItem[]
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@map("orders")
+}
+
+enum OrderStatus {
+  NEW
+  PREPARING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  orderId    String   @map("order_id")
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String   @map("menu_item_id")
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  quantity   Int
+  price      Float    // Price at the time of purchase to safeguard historical records
+  note       String?  // Item-level notes (e.g., "less spicy")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("order_items")
+}
+
+model CustomerFeedback {
+  id         String         @id @default(uuid())
+  value      FeedbackValue  // MUST_TRY, VERY_TASTY, GOOD, OK
+  comment    String?
+  menuItemId String?        @map("menu_item_id") // Optional link to specific food items
+  menuItem   MenuItem?      @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  @@map("customer_feedback")
+}
+
+enum FeedbackValue {
+  MUST_TRY    @map("Must Try")
+  VERY_TASTY  @map("Very Tasty")
+  GOOD        @map("Good")
+  OK          @map("OK")
+}
