@@ -7,21 +7,39 @@ export const dynamic = 'force-dynamic'
 
 // GET: Fetch current logged-in admin session
 export async function GET() {
-  const session = await getAdminSession()
-  
-  if (!session) {
+  try {
+    const session = await getAdminSession()
+
+    if (!session) {
+      return NextResponse.json(
+        { authenticated: false, error: 'Not authenticated' },
+        { status: 401 }
+      )
+    }
+
+    return NextResponse.json({ authenticated: true, admin: session })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('Auth GET error:', error)
     return NextResponse.json(
-      { authenticated: false, error: 'Not authenticated' },
-      { status: 401 }
+      { authenticated: false, error: 'Session check failed', details: message },
+      { status: 500 }
     )
   }
-
-  return NextResponse.json({ authenticated: true, admin: session })
 }
 
 // POST: Admin authentication login
 export async function POST(req: NextRequest) {
   try {
+    // 1. Validate DATABASE_URL is set
+    if (!process.env.DATABASE_URL) {
+      console.error('FATAL: DATABASE_URL environment variable is not set!')
+      return NextResponse.json(
+        { error: 'Server configuration error: DATABASE_URL is not set. Add it in Vercel → Settings → Environment Variables.' },
+        { status: 500 }
+      )
+    }
+
     const body = await req.json()
     const { username, password } = body
 
@@ -32,10 +50,20 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Query database for admin
-    const admin = await db.admin.findUnique({
-      where: { username },
-    })
+    // 2. Query database for admin
+    let admin
+    try {
+      admin = await db.admin.findUnique({
+        where: { username },
+      })
+    } catch (dbError: unknown) {
+      const dbMessage = dbError instanceof Error ? dbError.message : String(dbError)
+      console.error('Database query failed:', dbError)
+      return NextResponse.json(
+        { error: 'Database connection failed. Check DATABASE_URL and ensure tables exist (run prisma db push).', details: dbMessage },
+        { status: 500 }
+      )
+    }
 
     if (!admin) {
       return NextResponse.json(
@@ -44,7 +72,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Compare passwords
+    // 3. Compare passwords
     const isPasswordValid = bcrypt.compareSync(password, admin.password)
     if (!isPasswordValid) {
       return NextResponse.json(
@@ -53,7 +81,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Sign JWT token
+    // 4. Sign JWT token
     const payload = {
       id: admin.id,
       username: admin.username,
@@ -62,7 +90,7 @@ export async function POST(req: NextRequest) {
     }
     const token = signToken(payload)
 
-    // Save session in HTTP-Only cookie
+    // 5. Save session in HTTP-Only cookie
     await setSessionCookie(token)
 
     return NextResponse.json({
@@ -74,10 +102,11 @@ export async function POST(req: NextRequest) {
         role: admin.role,
       },
     })
-  } catch (error) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
     console.error('Login API error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Login failed', details: message },
       { status: 500 }
     )
   }
@@ -85,6 +114,15 @@ export async function POST(req: NextRequest) {
 
 // DELETE: Admin logout
 export async function DELETE() {
-  await clearSessionCookie()
-  return NextResponse.json({ success: true, message: 'Logged out successfully' })
+  try {
+    await clearSessionCookie()
+    return NextResponse.json({ success: true, message: 'Logged out successfully' })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('Logout error:', error)
+    return NextResponse.json(
+      { error: 'Logout failed', details: message },
+      { status: 500 }
+    )
+  }
 }

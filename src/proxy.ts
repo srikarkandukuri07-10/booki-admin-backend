@@ -8,24 +8,26 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const sessionCookie = request.cookies.get(COOKIE_NAME)
 
+  // 1. Root "/" → redirect to /dashboard (which will then check auth below)
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
   const isProtectedRoute = PROTECTED_ROUTES.some((route) =>
     pathname.startsWith(route)
   )
 
-  // 1. Redirect unauthenticated users trying to access protected routes to /login
+  // 2. Redirect unauthenticated users trying to access protected routes to /login
   if (isProtectedRoute && !sessionCookie) {
     const loginUrl = new URL('/login', request.url)
-    // Save the original route they wanted to access as a query parameter
     loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  // 2. Redirect authenticated users trying to access the login page to /dashboard
+  // 3. Redirect authenticated users trying to access the login page to /dashboard
   if (pathname.startsWith('/login') && sessionCookie) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
-
-  // Allow root path '/' to always serve the Customer Dashboard, regardless of admin session status
 
   return NextResponse.next()
 }
