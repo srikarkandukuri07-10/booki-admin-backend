@@ -18,6 +18,39 @@ export async function OPTIONS() {
   })
 }
 
+// GET: Fetch order details and status (Publicly accessible for live tracking)
+export async function GET(req: NextRequest, { params }: Props) {
+  try {
+    const { id } = await params
+    const order = await db.order.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        tableNumber: true,
+        status: true,
+        total: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    })
+
+    if (!order) {
+      return NextResponse.json(
+        { error: 'Order not found' },
+        { status: 404, headers: CORS_HEADERS }
+      )
+    }
+
+    return NextResponse.json({ success: true, order }, { headers: CORS_HEADERS })
+  } catch (error) {
+    console.error('Fetch Order API error:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch order details' },
+      { status: 500, headers: CORS_HEADERS }
+    )
+  }
+}
+
 // PATCH: Update order status (Admin only)
 export async function PATCH(req: NextRequest, { params }: Props) {
   try {

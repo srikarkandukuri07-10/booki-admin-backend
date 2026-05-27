@@ -15,13 +15,68 @@ export async function GET(req: NextRequest) {
       include: {
         items: {
           where: isPublic ? { availability: true } : undefined,
+          include: {
+            feedbacks: {
+              select: {
+                value: true
+              }
+            }
+          },
           orderBy: { createdAt: 'desc' },
         },
       },
       orderBy: { name: 'asc' },
     })
 
-    return NextResponse.json({ success: true, categories })
+    // Hydrate each item with feedbackStats
+    const categoriesHydrated = categories.map((cat) => ({
+      ...cat,
+      items: cat.items.map((item) => {
+        const feedbacks = item.feedbacks || []
+        const total = feedbacks.length
+        
+        let feedbackStats = null
+        if (total > 0) {
+          const counts = { MUST_TRY: 0, VERY_TASTY: 0, GOOD: 0, OK: 0 }
+          feedbacks.forEach((f) => {
+            if (f.value in counts) {
+              counts[f.value as keyof typeof counts]++
+            }
+          })
+          
+          let highestRating: keyof typeof counts = 'MUST_TRY'
+          let highestCount = 0
+          for (const key in counts) {
+            const val = key as keyof typeof counts
+            if (counts[val] > highestCount) {
+              highestCount = counts[val]
+              highestRating = val
+            }
+          }
+          
+          const percentage = Math.round((highestCount / total) * 100)
+          feedbackStats = {
+            rating: highestRating,
+            percentage,
+            totalCount: total
+          }
+        }
+
+        return {
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          image: item.image,
+          price: item.price,
+          veg: item.veg,
+          availability: item.availability,
+          categoryId: item.categoryId,
+          feedbackStats
+        }
+      })
+    }))
+
+    return NextResponse.json({ success: true, categories: categoriesHydrated })
   } catch (error) {
     console.error('Fetch Menu API error:', error)
     return NextResponse.json(
