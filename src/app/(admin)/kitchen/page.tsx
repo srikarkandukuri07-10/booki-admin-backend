@@ -145,7 +145,9 @@ export default function KitchenPage() {
                   <div className="flex items-center justify-between border-b border-border/30 pb-3">
                     <div className="flex items-baseline gap-2">
                       <span className="text-xs font-black text-muted-foreground uppercase">TICKET #{index + 1}</span>
-                      <h2 className="text-3xl font-black tracking-tight text-foreground">TABLE {order.tableNumber}</h2>
+                      <h2 className="text-3xl font-black tracking-tight text-foreground">
+                        {order.tableNumber.toLowerCase().includes('table') ? order.tableNumber.toUpperCase() : `TABLE ${order.tableNumber.toUpperCase()}`}
+                      </h2>
                     </div>
                     
                     <div className="flex items-center gap-2">

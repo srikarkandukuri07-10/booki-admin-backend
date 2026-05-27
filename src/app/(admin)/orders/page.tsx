@@ -155,7 +155,9 @@ export default function OrdersPage() {
                     >
                       <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
                         <div>
-                          <CardTitle className="text-base font-bold">Table {order.tableNumber}</CardTitle>
+                          <CardTitle className="text-base font-bold">
+                            {order.tableNumber.toLowerCase().includes('table') ? order.tableNumber : `Table ${order.tableNumber}`}
+                          </CardTitle>
                           <CardDescription className="text-[10px] mt-0.5 text-muted-foreground">ID: #{order.id.slice(0, 8)}</CardDescription>
                         </div>
                         <Badge className={`rounded-xl border font-bold text-[10px] flex items-center gap-1 ${getWaitSlaStyle(waitTime)}`}>
@@ -249,7 +251,9 @@ export default function OrdersPage() {
                     >
                       <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
                         <div>
-                          <CardTitle className="text-base font-bold">Table {order.tableNumber}</CardTitle>
+                          <CardTitle className="text-base font-bold">
+                            {order.tableNumber.toLowerCase().includes('table') ? order.tableNumber : `Table ${order.tableNumber}`}
+                          </CardTitle>
                           <CardDescription className="text-[10px] mt-0.5 text-muted-foreground">ID: #{order.id.slice(0, 8)}</CardDescription>
                         </div>
                         <Badge className={`rounded-xl border font-bold text-[10px] flex items-center gap-1 ${getWaitSlaStyle(waitTime)}`}>
