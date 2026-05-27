@@ -5,6 +5,7 @@ import { getAdminSession } from '@/lib/auth'
 export const dynamic = 'force-dynamic'
 import { Sidebar } from '@/components/sidebar'
 import { SocketProvider } from '@/components/socket-provider'
+import { MobileBottomNav } from '@/components/mobile-bottom-nav'
 import { ChefHat, Menu } from 'lucide-react'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -50,11 +51,14 @@ export default async function AdminLayout({
         </header>
 
         {/* Main Content Pane */}
-        <div className="md:pl-72 pt-16 md:pt-0 min-h-screen">
+        <div className="md:pl-72 pt-16 md:pt-0 pb-16 md:pb-0 min-h-screen">
           <main className="container mx-auto p-4 md:p-8 max-w-7xl animate-fade-in">
             {children}
           </main>
         </div>
+
+        {/* Sticky Mobile Tab Bar */}
+        <MobileBottomNav />
       </div>
     </SocketProvider>
   )
