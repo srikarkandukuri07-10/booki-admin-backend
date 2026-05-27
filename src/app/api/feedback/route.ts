@@ -146,7 +146,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { value, comment, menuItemId } = body // value matches MUST_TRY, VERY_TASTY, GOOD, OK
+    const { value, comment, menuItemId, menuItemName } = body // value matches MUST_TRY, VERY_TASTY, GOOD, OK
 
     if (!value) {
       return NextResponse.json({ error: 'Feedback rating value is required' }, { status: 400, headers: CORS_HEADERS })
@@ -169,14 +169,38 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // If menuItemId is provided, verify item exists
+    // Resolve active database menu item ID
+    let resolvedItemId: string | null = null
+
     if (menuItemId) {
-      const item = await db.menuItem.findUnique({
-        where: { id: menuItemId },
-      })
+      // 1. Try fetching by ID directly
+      let item = null
+      
+      // Basic UUID structure validation to prevent Prisma crashes on static IDs (e.g. "start_01")
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(menuItemId)
+      if (isUuid) {
+        item = await db.menuItem.findUnique({
+          where: { id: menuItemId },
+        })
+      }
+
+      // 2. Fallback: Query by case-insensitive name if ID match failed
+      if (!item && menuItemName) {
+        item = await db.menuItem.findFirst({
+          where: {
+            name: {
+              equals: menuItemName.trim(),
+              mode: 'insensitive',
+            },
+          },
+        })
+      }
+
       if (!item) {
         return NextResponse.json({ error: 'Linked menu item not found' }, { status: 404, headers: CORS_HEADERS })
       }
+      
+      resolvedItemId = item.id // Ensure we bind the feedback to the correct database UUID!
     }
 
     // Save feedback
@@ -184,7 +208,7 @@ export async function POST(req: NextRequest) {
       data: {
         value: enumValue,
         comment: comment || '',
-        menuItemId: menuItemId || null,
+        menuItemId: resolvedItemId,
       },
     })
 
