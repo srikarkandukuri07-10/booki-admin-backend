@@ -4,6 +4,20 @@ import { getAdminSession } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+// OPTIONS: Preflight CORS request handler
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  })
+}
+
 // GET: Fetch aggregated feedback analytics and text reviews (Admin only)
 export async function GET() {
   try {
@@ -135,7 +149,7 @@ export async function POST(req: NextRequest) {
     const { value, comment, menuItemId } = body // value matches MUST_TRY, VERY_TASTY, GOOD, OK
 
     if (!value) {
-      return NextResponse.json({ error: 'Feedback rating value is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Feedback rating value is required' }, { status: 400, headers: CORS_HEADERS })
     }
 
     // Format value string to Prisma Enum representation
@@ -151,7 +165,7 @@ export async function POST(req: NextRequest) {
     if (!enumValue) {
       return NextResponse.json(
         { error: 'Invalid feedback value. Must be one of: "Must Try", "Very Tasty", "Good", "OK"' },
-        { status: 400 }
+        { status: 400, headers: CORS_HEADERS }
       )
     }
 
@@ -161,7 +175,7 @@ export async function POST(req: NextRequest) {
         where: { id: menuItemId },
       })
       if (!item) {
-        return NextResponse.json({ error: 'Linked menu item not found' }, { status: 404 })
+        return NextResponse.json({ error: 'Linked menu item not found' }, { status: 404, headers: CORS_HEADERS })
       }
     }
 
@@ -174,12 +188,12 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ success: true, data: feedback }, { status: 201 })
+    return NextResponse.json({ success: true, data: feedback }, { status: 201, headers: CORS_HEADERS })
   } catch (error) {
     console.error('Submit Feedback API error:', error)
     return NextResponse.json(
       { error: 'Failed to submit feedback' },
-      { status: 500 }
+      { status: 500, headers: CORS_HEADERS }
     )
   }
 }
