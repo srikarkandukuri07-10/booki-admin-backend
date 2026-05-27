@@ -80,8 +80,7 @@ export default function OrdersPage() {
   // Segment active orders for pipeline columns
   const activeOrders = orders.filter((o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED')
   const newOrders = activeOrders.filter((o) => o.status === 'NEW')
-  const preparingOrders = activeOrders.filter((o) => o.status === 'PREPARING')
-  const readyOrders = activeOrders.filter((o) => o.status === 'READY')
+  const preparingOrders = activeOrders.filter((o) => o.status === 'PREPARING' || o.status === 'READY')
 
   return (
     <div className="space-y-6">
@@ -127,7 +126,7 @@ export default function OrdersPage() {
         </div>
       ) : (
         /* Kanban Pipeline Lanes */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 align-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 align-stretch">
           
           {/* COLUMN 1: NEW ORDERS */}
           <div className="flex flex-col h-full min-h-[500px] rounded-2xl border border-border/40 bg-zinc-950/20 dark:bg-zinc-950/40 p-4">
@@ -301,97 +300,14 @@ export default function OrdersPage() {
                             <X className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => handleStatusChange(order.id, 'READY')}
+                            onClick={() => handleStatusChange(order.id, 'DELIVERED')}
                             disabled={updatingId === order.id}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs cursor-pointer shadow-sm shadow-amber-500/10 disabled:opacity-50"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-xs cursor-pointer shadow-sm shadow-emerald-500/10 disabled:opacity-50"
                           >
-                            Ready
-                            <Check className="h-3.5 w-3.5" />
+                            Deliver
+                            <Check className="h-3.5 w-3.5" strokeWidth={3} />
                           </button>
                         </div>
-                      </CardFooter>
-                    </Card>
-                  )
-                })
-              )}
-            </div>
-          </div>
-
-          {/* COLUMN 3: READY FOR DELIVERY */}
-          <div className="flex flex-col h-full min-h-[500px] rounded-2xl border border-border/40 bg-zinc-950/20 dark:bg-zinc-950/40 p-4">
-            <div className="flex items-center justify-between pb-3 border-b border-border/30 mb-4">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <h3 className="font-bold text-sm tracking-wide text-foreground">READY TO SERVE</h3>
-              </div>
-              <Badge variant="secondary" className="rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border-emerald-500/10">
-                {readyOrders.length}
-              </Badge>
-            </div>
-
-            <div className="flex-1 space-y-4 overflow-y-auto max-h-[70vh] pr-1">
-              {readyOrders.length === 0 ? (
-                <div className="flex h-full min-h-[200px] items-center justify-center text-center">
-                  <p className="text-xs text-muted-foreground">No dishes pending waiter collection.</p>
-                </div>
-              ) : (
-                readyOrders.map((order) => {
-                  const waitTime = getElapsedMinutes(order.createdAt)
-                  return (
-                    <Card 
-                      key={order.id} 
-                      className="bg-card/75 backdrop-blur-md transition-all duration-300 border border-emerald-500/25 dark:border-emerald-500/15"
-                    >
-                      <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-                        <div>
-                          <CardTitle className="text-base font-bold">Table {order.tableNumber}</CardTitle>
-                          <CardDescription className="text-[10px] mt-0.5 text-muted-foreground">ID: #{order.id.slice(0, 8)}</CardDescription>
-                        </div>
-                        <Badge className="rounded-xl border font-bold text-[10px] flex items-center gap-1 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
-                          <Check className="h-3 w-3" />
-                          Ready
-                        </Badge>
-                      </CardHeader>
-                      <CardContent className="p-4 pt-1 pb-2">
-                        {/* Order Items List */}
-                        <ul className="space-y-1 mt-2">
-                          {order.items.map((item) => (
-                            <li key={item.id} className="text-xs flex flex-col border-b border-border/10 py-1 last:border-0">
-                              <div className="flex items-center justify-between text-muted-foreground">
-                                <span className="font-medium text-foreground">
-                                  {item.quantity}x {item.menuItem.name}
-                                </span>
-                                <span>₹{item.price * item.quantity}</span>
-                              </div>
-                              {item.note && (
-                                <span className="text-[10px] text-orange-500 font-semibold mt-0.5 ml-5">
-                                  ↳ {item.note}
-                                </span>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-
-                        {/* Customization notes */}
-                        {order.notes && (
-                          <div className="mt-3 rounded-lg bg-orange-500/5 dark:bg-orange-500/10 border border-orange-500/10 p-2.5 text-[11px] text-orange-600 dark:text-orange-300 flex items-start gap-1.5">
-                            <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                            <p className="leading-normal font-medium">{order.notes}</p>
-                          </div>
-                        )}
-                      </CardContent>
-                      <CardFooter className="p-4 pt-2 border-t border-border/20 flex items-center justify-between gap-3 bg-zinc-950/5 dark:bg-zinc-950/20 rounded-b-2xl">
-                        <div className="text-xs">
-                          <p className="text-[10px] text-muted-foreground leading-none">Total Value</p>
-                          <p className="text-sm font-extrabold mt-1">₹{order.total}</p>
-                        </div>
-                        <button
-                          onClick={() => handleStatusChange(order.id, 'DELIVERED')}
-                          disabled={updatingId === order.id}
-                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-xs cursor-pointer shadow-sm shadow-emerald-500/10 disabled:opacity-50"
-                        >
-                          Deliver Table
-                        </button>
                       </CardFooter>
                     </Card>
                   )

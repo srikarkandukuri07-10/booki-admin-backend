@@ -47,7 +47,7 @@ export default function KitchenPage() {
 
   const handleFinishCooking = async (orderId: string) => {
     setUpdatingId(orderId)
-    await updateOrderStatus(orderId, 'READY')
+    await updateOrderStatus(orderId, 'DELIVERED')
     setUpdatingId(null)
   }
 
