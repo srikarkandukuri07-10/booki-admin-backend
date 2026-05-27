@@ -60,6 +60,11 @@ export async function PUT(req: NextRequest, { params }: Props) {
       data: updateData,
     })
 
+    if ((global as any).io) {
+      (global as any).io.emit('menu-updated');
+      console.log('📡 Broadcasted menu-updated socket notification from PUT!');
+    }
+
     return NextResponse.json({ success: true, data: updatedItem })
   } catch (error) {
     console.error('Update Menu Item API error:', error)
@@ -95,6 +100,11 @@ export async function DELETE(req: NextRequest, { params }: Props) {
       await db.menuItem.delete({
         where: { id },
       })
+
+      if ((global as any).io) {
+        (global as any).io.emit('menu-updated');
+        console.log('📡 Broadcasted menu-updated socket notification from DELETE!');
+      }
     } catch (dbError: any) {
       if (dbError.code === 'P2003') {
         // Prisma foreign key constraint failure

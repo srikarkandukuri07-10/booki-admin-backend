@@ -138,6 +138,11 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    if ((global as any).io) {
+      (global as any).io.emit('menu-updated');
+      console.log('📡 Broadcasted menu-updated socket notification from POST!');
+    }
+
     return NextResponse.json({ success: true, data: menuItem }, { status: 201 })
   } catch (error) {
     console.error('Create Menu Item API error:', error)
