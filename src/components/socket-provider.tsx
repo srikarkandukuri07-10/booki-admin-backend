@@ -55,6 +55,38 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     }
   }, [addOrder, updateOrderInState])
 
+  // Background polling fallback for serverless environments (like Vercel) where WebSockets fail
+  useEffect(() => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/orders')
+        const data = await res.json()
+        
+        if (data.success && data.orders) {
+          const currentOrders = useOrderStore.getState().orders
+          const fetchedOrders = data.orders
+          
+          // Check if there are any brand new orders we don't have in state yet
+          const hasNewIncomingOrders = fetchedOrders.some(
+            (fo: any) => fo.status === 'NEW' && !currentOrders.some((co) => co.id === fo.id)
+          )
+          
+          // Update the store silently (without loading triggers)
+          useOrderStore.setState({ orders: fetchedOrders })
+          
+          // Trigger professional chime if a new order is received
+          if (hasNewIncomingOrders) {
+            useOrderStore.getState().playNotificationSound()
+          }
+        }
+      } catch (err) {
+        console.warn('📡 Realtime Background Poll failed:', err)
+      }
+    }, 5000) // Poll every 5 seconds for responsive live updates
+
+    return () => clearInterval(pollInterval)
+  }, [])
+
   return (
     <SocketContext.Provider value={socket}>
       {children}
