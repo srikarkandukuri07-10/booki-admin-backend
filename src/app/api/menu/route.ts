@@ -14,7 +14,6 @@ export async function GET(req: NextRequest) {
     const categories = await db.menuCategory.findMany({
       include: {
         items: {
-          where: isPublic ? { availability: true } : undefined,
           include: {
             feedbacks: {
               select: {
