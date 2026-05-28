@@ -2,7 +2,7 @@
 const { loadEnvConfig } = require('@next/env')
 loadEnvConfig(process.cwd())
 
-const { createServer } = require('https')
+const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
 const { Server } = require('socket.io')
@@ -57,6 +57,21 @@ async function ensureSslCertificates() {
 // gamePlayers: Map<gameId, Map<socketId, { playerName, tableName, socketId, joinedAt }>>
 const gamePlayers = new Map()
 
+// gameLobbies: Map<gameId, { lobbyTimeLeft: number, intervalId: NodeJS.Timeout }>
+const gameLobbies = new Map()
+
+function checkAndCleanupLobby(gameId, io) {
+  const playersMap = gamePlayers.get(gameId)
+  if (!playersMap || playersMap.size === 0) {
+    const lobby = gameLobbies.get(gameId)
+    if (lobby) {
+      clearInterval(lobby.intervalId)
+      gameLobbies.delete(gameId)
+      console.log(`🎮 Game ${gameId} lobby empty, cleaned up timer.`)
+    }
+  }
+}
+
 /**
  * Helper: get the player list array for a given gameId
  */
@@ -70,14 +85,8 @@ function getGamePlayerList(gameId) {
   }))
 }
 
-ensureSslCertificates().then(() => {
-  app.prepare().then(() => {
-    const options = {
-      key: fs.readFileSync(keyPath),
-      cert: fs.readFileSync(certPath)
-  }
-
-  const httpServer = createServer(options, (req, res) => {
+app.prepare().then(() => {
+  const httpServer = createServer((req, res) => {
     const parsedUrl = parse(req.url, true)
     handle(req, res, parsedUrl)
   })
@@ -127,6 +136,39 @@ ensureSslCertificates().then(() => {
       const players = getGamePlayerList(gameId)
       io.to(roomName).emit('game-players-updated', { gameId, players })
       console.log(`🎮 ${playerName} (table: ${tableName}) joined game ${gameId} — ${players.length} player(s) now`)
+
+      // Start lobby matchmaking timer if not already active
+      if (!gameLobbies.has(gameId)) {
+        const lobbyState = {
+          lobbyTimeLeft: 40,
+          intervalId: null
+        }
+
+        lobbyState.intervalId = setInterval(() => {
+          const lobby = gameLobbies.get(gameId)
+          if (!lobby) {
+            clearInterval(lobbyState.intervalId)
+            return
+          }
+          
+          lobby.lobbyTimeLeft -= 1
+          
+          if (lobby.lobbyTimeLeft <= 0) {
+            io.to(roomName).emit('game-lobby-start', { gameId })
+            clearInterval(lobby.intervalId)
+            gameLobbies.delete(gameId)
+            console.log(`🎮 Game ${gameId} lobby matchmaking complete. Starting game!`)
+          } else {
+            io.to(roomName).emit('game-lobby-timer-updated', { gameId, lobbyTimeLeft: lobby.lobbyTimeLeft })
+          }
+        }, 1000)
+
+        gameLobbies.set(gameId, lobbyState)
+        io.to(roomName).emit('game-lobby-timer-updated', { gameId, lobbyTimeLeft: lobbyState.lobbyTimeLeft })
+      } else {
+        const lobby = gameLobbies.get(gameId)
+        socket.emit('game-lobby-timer-updated', { gameId, lobbyTimeLeft: lobby.lobbyTimeLeft })
+      }
     })
 
     // Player leaves a game room
@@ -147,6 +189,8 @@ ensureSslCertificates().then(() => {
         const players = getGamePlayerList(gameId)
         io.to(roomName).emit('game-players-updated', { gameId, players })
         console.log(`🎮 ${leaving?.playerName ?? socket.id} left game ${gameId} — ${players.length} player(s) remaining`)
+        
+        checkAndCleanupLobby(gameId, io)
       }
     })
 
@@ -180,6 +224,8 @@ ensureSslCertificates().then(() => {
           const players = getGamePlayerList(gameId)
           io.to(`game-${gameId}`).emit('game-players-updated', { gameId, players })
           console.log(`🎮 Disconnected player ${leaving?.playerName ?? socket.id} removed from game ${gameId}`)
+          
+          checkAndCleanupLobby(gameId, io)
         }
       }
     })
@@ -190,9 +236,8 @@ ensureSslCertificates().then(() => {
   console.log('🚀 Socket.IO Server initialized and exposed globally')
 
   httpServer.listen(port, '0.0.0.0', () => {
-    console.log(`> 🚀 Secure HTTPS Server is running!`)
-    console.log(`  - Local:   https://localhost:${port}`)
-    console.log(`  - Network: https://192.168.0.6:${port} (for mobile testing)`)
+    console.log(`> 🚀 HTTP Server is running!`)
+    console.log(`  - Local:   http://localhost:${port}`)
+    console.log(`  - Network: http://192.168.0.6:${port} (for mobile testing)`)
   })
-})
 })
