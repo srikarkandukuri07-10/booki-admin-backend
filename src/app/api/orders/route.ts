@@ -182,9 +182,20 @@ export async function POST(req: NextRequest) {
         orderBy: { tokenNumber: 'desc' },
       })
 
+      // Get the current running token setting to check if it's currently at 0 (or was reset)
+      const runningTokenSetting = await tx.systemSetting.findUnique({
+        where: { key: 'current_running_token' }
+      })
+      const runningTokenVal = runningTokenSetting && runningTokenSetting.value 
+        ? parseInt(runningTokenSetting.value, 10) 
+        : 0
+
       let nextToken = 1
 
-      if (activeOrdersCount > 0 && highestTokenOrder && highestTokenOrder.tokenNumber) {
+      if (runningTokenVal === 0) {
+        // If the token system is currently at 0 (reset/empty), the next token must be 1!
+        nextToken = 1
+      } else if (activeOrdersCount > 0 && highestTokenOrder && highestTokenOrder.tokenNumber) {
         // Active orders exist, continue incrementing sequentially
         nextToken = highestTokenOrder.tokenNumber + 1
       } else if (highestTokenOrder && highestTokenOrder.tokenNumber) {
