@@ -46,8 +46,8 @@ export async function GET() {
         const nowTime = Date.now()
         const diffMinutes = (nowTime - completedTime) / 60000
 
-        if (diffMinutes >= 20) {
-          // Idle for at least 20 minutes, reset setting in database
+        if (diffMinutes >= 1) {
+          // Idle for at least 1 minute, reset setting in database
           await db.systemSetting.upsert({
             where: { key: 'current_running_token' },
             update: { value: '0' },

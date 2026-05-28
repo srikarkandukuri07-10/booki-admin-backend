@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
         // Active orders exist, continue incrementing sequentially
         nextToken = highestTokenOrder.tokenNumber + 1
       } else if (highestTokenOrder && highestTokenOrder.tokenNumber) {
-        // Queue was empty, check if it has been idle for >= 20 minutes
+        // Queue was empty, check if it has been idle for >= 1 minutes
         const lastCompletedOrder = await tx.order.findFirst({
           where: { status: { in: ['DELIVERED', 'CANCELLED'] } },
           orderBy: { updatedAt: 'desc' }
@@ -199,12 +199,12 @@ export async function POST(req: NextRequest) {
           const nowTime = Date.now()
           const diffMinutes = (nowTime - completedTime) / 60000
 
-          if (diffMinutes >= 20) {
-            // Idle for 20+ minutes, restart token system back to 0! (So next token is 1)
+          if (diffMinutes >= 1) {
+            // Idle for 1+ minutes, restart token system back to 0! (So next token is 1)
             nextToken = 1
-            console.log(`⏳ System idle for ${diffMinutes.toFixed(1)}m (>= 20m). Restarting token queue from 0.`)
+            console.log(`⏳ System idle for ${diffMinutes.toFixed(1)}m (>= 1m). Restarting token queue from 0.`)
           } else {
-            // Idle for less than 20 minutes, continue incrementing
+            // Idle for less than 1 minutes, continue incrementing
             nextToken = highestTokenOrder.tokenNumber + 1
           }
         } else {
