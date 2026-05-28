@@ -180,6 +180,22 @@ export async function POST(req: NextRequest) {
         ? highestTokenOrder.tokenNumber + 1 
         : 1
 
+      // Auto-promote current running token from 0 to nextToken if queue was empty
+      const runningTokenSetting = await tx.systemSetting.findUnique({
+        where: { key: 'current_running_token' }
+      })
+      const runningTokenVal = runningTokenSetting && runningTokenSetting.value 
+        ? parseInt(runningTokenSetting.value, 10) 
+        : 0
+
+      if (runningTokenVal === 0) {
+        await tx.systemSetting.upsert({
+          where: { key: 'current_running_token' },
+          update: { value: nextToken.toString() },
+          create: { key: 'current_running_token', value: nextToken.toString() }
+        })
+      }
+
       const order = await tx.order.create({
         data: {
           tableNumber,
@@ -216,11 +232,22 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // 5. Trigger Socket.IO Realtime update to Admin Dashboard
+    // 5. Trigger Socket.IO Realtime update to Admin Dashboard & broadcast updated running token
     const io = (global as any).io
     if (io) {
       io.to('admin-room').emit('order-created', orderWithDetails)
       console.log(`📡 Realtime Socket Event: 'order-created' broadcasted to admin-room for Table ${tableNumber}`)
+
+      // Retrieve the current running token to emit it
+      const currentTokenSetting = await db.systemSetting.findUnique({
+        where: { key: 'current_running_token' }
+      })
+      const currentToken = currentTokenSetting && currentTokenSetting.value
+        ? parseInt(currentTokenSetting.value, 10)
+        : 0
+      
+      io.emit('current-token-updated', { currentToken })
+      console.log(`📡 Realtime Socket Event: 'current-token-updated' set to #${currentToken} (First order placed)`)
     }
 
     return NextResponse.json(

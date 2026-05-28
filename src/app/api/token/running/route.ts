@@ -24,14 +24,14 @@ export async function GET() {
       where: { key: 'current_running_token' }
     })
 
-    const tokenVal = setting && setting.value ? parseInt(setting.value, 10) : 1
-    const currentToken = isNaN(tokenVal) ? 1 : tokenVal
+    const tokenVal = setting && setting.value ? parseInt(setting.value, 10) : 0
+    const currentToken = isNaN(tokenVal) ? 0 : tokenVal
 
     return NextResponse.json({ success: true, currentToken }, { headers: CORS_HEADERS })
   } catch (error) {
     console.error('Fetch running token API error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch current running token', currentToken: 1 },
+      { error: 'Failed to fetch current running token', currentToken: 0 },
       { status: 500, headers: CORS_HEADERS }
     )
   }

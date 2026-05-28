@@ -134,13 +134,13 @@ export default function KitchenPage() {
             </span>
             <div className="flex items-center gap-2">
               <button
-                disabled={isUpdatingToken || currentToken <= 1}
+                disabled={isUpdatingToken || currentToken <= 0}
                 onClick={() => updateRunningToken(currentToken - 1)}
                 className="w-8 h-8 rounded-xl bg-orange-600 hover:bg-orange-700 text-white flex items-center justify-center font-black cursor-pointer transition-colors active:scale-95 disabled:opacity-40"
               >
                 -
               </button>
-              <span className="text-xl font-black text-foreground w-8 text-center font-mono">
+              <span className="text-3xl font-black text-orange-500 min-w-[50px] text-center font-mono drop-shadow-[0_0_10px_rgba(245,158,11,0.2)]">
                 {currentToken}
               </span>
               <button

@@ -16,11 +16,14 @@ import {
   VolumeX,
   Plus
 } from 'lucide-react'
+import { socket } from '@/lib/socket'
 
 export default function OrdersPage() {
   const { orders, isLoading, error, fetchOrders, updateOrderStatus } = useOrderStore()
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [currentToken, setCurrentToken] = useState<number>(0)
+  const [isUpdatingToken, setIsUpdatingToken] = useState(false)
   
   // Track elapsed time for SLA badges
   const [now, setNow] = useState<number | null>(null)
@@ -36,6 +39,54 @@ export default function OrdersPage() {
 
     return () => clearInterval(interval)
   }, [fetchOrders])
+
+  useEffect(() => {
+    const fetchRunningToken = async () => {
+      try {
+        const res = await fetch('/api/token/running')
+        const data = await res.json()
+        if (data.success) {
+          setCurrentToken(data.currentToken)
+        }
+      } catch (err) {
+        console.error('Error fetching running token:', err)
+      }
+    }
+    
+    fetchRunningToken()
+
+    const handleTokenUpdated = (data: { currentToken: number }) => {
+      console.log('📡 Realtime currentToken updated inside OrdersPage:', data.currentToken)
+      setCurrentToken(data.currentToken)
+    }
+
+    socket.on('current-token-updated', handleTokenUpdated)
+    return () => {
+      socket.off('current-token-updated', handleTokenUpdated)
+    }
+  }, [])
+
+  const updateRunningToken = async (newVal: number) => {
+    if (newVal < 0) return
+    setIsUpdatingToken(true)
+    try {
+      const res = await fetch('/api/token/running', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ currentToken: newVal }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setCurrentToken(newVal)
+      }
+    } catch (err) {
+      console.error('Failed to update running token:', err)
+    } finally {
+      setIsUpdatingToken(false)
+    }
+  }
 
   // sound alarm tester
   const testAlarm = () => {
@@ -117,6 +168,47 @@ export default function OrdersPage() {
         </div>
       </div>
 
+      {/* Token & Stats Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="border-orange-500/30 bg-orange-500/[0.02] shadow-[0_4px_20px_rgba(245,158,11,0.05)] rounded-3xl md:col-span-1">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest leading-none">
+                CURRENT PREPARING TOKEN
+              </p>
+              <h3 className="text-4xl font-black text-foreground font-mono leading-none mt-1">
+                #{currentToken}
+              </h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={isUpdatingToken || currentToken <= 0}
+                onClick={() => updateRunningToken(currentToken - 1)}
+                className="w-8 h-8 rounded-xl bg-orange-600 hover:bg-orange-700 text-white flex items-center justify-center font-black cursor-pointer transition-colors active:scale-95 disabled:opacity-40"
+              >
+                -
+              </button>
+              <button
+                disabled={isUpdatingToken}
+                onClick={() => updateRunningToken(currentToken + 1)}
+                className="w-8 h-8 rounded-xl bg-orange-600 hover:bg-orange-700 text-white flex items-center justify-center font-black cursor-pointer transition-colors active:scale-95 disabled:opacity-40"
+              >
+                +
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+        
+        {/* Helper descriptive text card */}
+        <Card className="border-border/30 bg-card/40 rounded-3xl md:col-span-2">
+          <CardContent className="p-5 flex h-full items-center">
+            <p className="text-xs text-muted-foreground leading-normal">
+              💡 <strong>Token System Live:</strong> Placed customer orders are assigned real-time sequential queue numbers. Mark tickets as <em>Preparing</em> in the Kitchen tab to automatically advance the token, or use the controls here to override manually.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       {isLoading && orders.length === 0 ? (
         <div className="flex h-[350px] items-center justify-center rounded-2xl border border-dashed border-border/40 bg-card/20">
           <div className="text-center space-y-2">
@@ -154,11 +246,18 @@ export default function OrdersPage() {
                       className={`bg-card/75 backdrop-blur-md transition-all duration-300 border ${getSlaCardBorder(waitTime, order.status)}`}
                     >
                       <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-                        <div>
-                          <CardTitle className="text-base font-bold">
-                            {order.tableNumber.toLowerCase().includes('table') ? order.tableNumber : `Table ${order.tableNumber}`}
-                          </CardTitle>
-                          <CardDescription className="text-[10px] mt-0.5 text-muted-foreground">ID: #{order.id.slice(0, 8)}</CardDescription>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <CardTitle className="text-base font-bold">
+                              {order.tableNumber.toLowerCase().includes('table') ? order.tableNumber : `Table ${order.tableNumber}`}
+                            </CardTitle>
+                            {order.tokenNumber && (
+                              <Badge className="bg-blue-600 dark:bg-blue-500 text-white font-black text-[9px] px-1.5 py-0 rounded">
+                                TOKEN #{order.tokenNumber}
+                              </Badge>
+                            )}
+                          </div>
+                          <CardDescription className="text-[10px] text-muted-foreground">ID: #{order.id.slice(0, 8)}</CardDescription>
                         </div>
                         <Badge className={`rounded-xl border font-bold text-[10px] flex items-center gap-1 ${getWaitSlaStyle(waitTime)}`}>
                           <Clock className="h-3 w-3" />
@@ -250,11 +349,18 @@ export default function OrdersPage() {
                       className={`bg-card/75 backdrop-blur-md transition-all duration-300 border ${getSlaCardBorder(waitTime, order.status)}`}
                     >
                       <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-                        <div>
-                          <CardTitle className="text-base font-bold">
-                            {order.tableNumber.toLowerCase().includes('table') ? order.tableNumber : `Table ${order.tableNumber}`}
-                          </CardTitle>
-                          <CardDescription className="text-[10px] mt-0.5 text-muted-foreground">ID: #{order.id.slice(0, 8)}</CardDescription>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <CardTitle className="text-base font-bold">
+                              {order.tableNumber.toLowerCase().includes('table') ? order.tableNumber : `Table ${order.tableNumber}`}
+                            </CardTitle>
+                            {order.tokenNumber && (
+                              <Badge className="bg-blue-600 dark:bg-blue-500 text-white font-black text-[9px] px-1.5 py-0 rounded">
+                                TOKEN #{order.tokenNumber}
+                              </Badge>
+                            )}
+                          </div>
+                          <CardDescription className="text-[10px] text-muted-foreground">ID: #{order.id.slice(0, 8)}</CardDescription>
                         </div>
                         <Badge className={`rounded-xl border font-bold text-[10px] flex items-center gap-1 ${getWaitSlaStyle(waitTime)}`}>
                           <Clock className="h-3 w-3" />
