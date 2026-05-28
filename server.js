@@ -54,6 +54,22 @@ async function ensureSslCertificates() {
   }
 }
 
+// gamePlayers: Map<gameId, Map<socketId, { playerName, tableName, socketId, joinedAt }>>
+const gamePlayers = new Map()
+
+/**
+ * Helper: get the player list array for a given gameId
+ */
+function getGamePlayerList(gameId) {
+  const playersMap = gamePlayers.get(gameId)
+  if (!playersMap) return []
+  return Array.from(playersMap.values()).map(({ playerName, tableName, socketId }) => ({
+    playerName,
+    tableName,
+    socketId
+  }))
+}
+
 ensureSslCertificates().then(() => {
   app.prepare().then(() => {
     const options = {
@@ -90,8 +106,82 @@ ensureSslCertificates().then(() => {
       console.log(`🍔 Socket ${socket.id} joined order room order-${orderId}`)
     })
 
+    // ─── Game Zone Events ───────────────────────────────────────────
+
+    // Player joins a game room
+    socket.on('join-game', ({ gameId, playerName, tableName }) => {
+      const roomName = `game-${gameId}`
+      socket.join(roomName)
+
+      if (!gamePlayers.has(gameId)) {
+        gamePlayers.set(gameId, new Map())
+      }
+
+      gamePlayers.get(gameId).set(socket.id, {
+        playerName,
+        tableName,
+        socketId: socket.id,
+        joinedAt: new Date().toISOString()
+      })
+
+      const players = getGamePlayerList(gameId)
+      io.to(roomName).emit('game-players-updated', { gameId, players })
+      console.log(`🎮 ${playerName} (table: ${tableName}) joined game ${gameId} — ${players.length} player(s) now`)
+    })
+
+    // Player leaves a game room
+    socket.on('leave-game', ({ gameId }) => {
+      const roomName = `game-${gameId}`
+      socket.leave(roomName)
+
+      const playersMap = gamePlayers.get(gameId)
+      if (playersMap) {
+        const leaving = playersMap.get(socket.id)
+        playersMap.delete(socket.id)
+
+        // Clean up empty game maps
+        if (playersMap.size === 0) {
+          gamePlayers.delete(gameId)
+        }
+
+        const players = getGamePlayerList(gameId)
+        io.to(roomName).emit('game-players-updated', { gameId, players })
+        console.log(`🎮 ${leaving?.playerName ?? socket.id} left game ${gameId} — ${players.length} player(s) remaining`)
+      }
+    })
+
+    // Real-time game action sync (broadcast to everyone else in the room)
+    socket.on('game-action', ({ gameId, action }) => {
+      socket.to(`game-${gameId}`).emit('game-action-broadcast', { gameId, action })
+      console.log(`🎮 Action in game ${gameId} from ${socket.id}`)
+    })
+
+    // Score update (broadcast to everyone in the room, including sender)
+    socket.on('game-score-update', ({ gameId, playerName, score }) => {
+      io.to(`game-${gameId}`).emit('game-score-broadcast', { gameId, playerName, score })
+      console.log(`🎮 Score update in game ${gameId}: ${playerName} → ${score}`)
+    })
+
+    // ─── Disconnect Cleanup ───────────────────────────────────────────
+
     socket.on('disconnect', () => {
       console.log(`🔌 Client disconnected: ${socket.id}`)
+
+      // Clean up player from ALL game rooms they may have been in
+      for (const [gameId, playersMap] of gamePlayers.entries()) {
+        if (playersMap.has(socket.id)) {
+          const leaving = playersMap.get(socket.id)
+          playersMap.delete(socket.id)
+
+          if (playersMap.size === 0) {
+            gamePlayers.delete(gameId)
+          }
+
+          const players = getGamePlayerList(gameId)
+          io.to(`game-${gameId}`).emit('game-players-updated', { gameId, players })
+          console.log(`🎮 Disconnected player ${leaving?.playerName ?? socket.id} removed from game ${gameId}`)
+        }
+      }
     })
   })
 
