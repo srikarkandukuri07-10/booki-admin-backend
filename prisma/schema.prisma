@@ -53,10 +53,21 @@ model Order {
   status      OrderStatus @default(NEW)
   total       Float
   items       OrderItem[]
+  tokenNumber Int?        @map("token_number")
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
   @@map("orders")
+}
+
+model SystemSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
 }
 
 enum OrderStatus {

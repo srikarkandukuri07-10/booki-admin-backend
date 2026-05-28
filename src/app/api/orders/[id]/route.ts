@@ -105,8 +105,42 @@ export async function PATCH(req: NextRequest, { params }: Props) {
       },
     })
 
-    // Emit Socket.IO Realtime update to Admin Dashboard and Customer App
+    // Handle token system automation
     const io = (global as any).io
+    if (status === 'PREPARING' && updatedOrder.tokenNumber) {
+      // Chef started preparing this order, set it as current running token
+      await db.systemSetting.upsert({
+        where: { key: 'current_running_token' },
+        update: { value: updatedOrder.tokenNumber.toString() },
+        create: { key: 'current_running_token', value: updatedOrder.tokenNumber.toString() }
+      })
+      if (io) {
+        io.emit('current-token-updated', { currentToken: updatedOrder.tokenNumber })
+      }
+      console.log(`📡 Realtime Socket Event: 'current-token-updated' set to #${updatedOrder.tokenNumber} (Preparing order)`)
+    } else if (status === 'DELIVERED' || status === 'READY') {
+      // Chef finished preparing this order, find the next one in the queue
+      const nextActiveOrder = await db.order.findFirst({
+        where: {
+          status: { in: ['NEW', 'PREPARING'] },
+          tokenNumber: { not: null }
+        },
+        orderBy: { tokenNumber: 'asc' }
+      })
+      if (nextActiveOrder && nextActiveOrder.tokenNumber) {
+        await db.systemSetting.upsert({
+          where: { key: 'current_running_token' },
+          update: { value: nextActiveOrder.tokenNumber.toString() },
+          create: { key: 'current_running_token', value: nextActiveOrder.tokenNumber.toString() }
+        })
+        if (io) {
+          io.emit('current-token-updated', { currentToken: nextActiveOrder.tokenNumber })
+        }
+        console.log(`📡 Realtime Socket Event: 'current-token-updated' set to #${nextActiveOrder.tokenNumber} (Next in queue)`)
+      }
+    }
+
+    // Emit Socket.IO Realtime update to Admin Dashboard and Customer App
     if (io) {
       // 1. Notify other admin dashboard instances
       io.to('admin-room').emit('order-updated', updatedOrder)

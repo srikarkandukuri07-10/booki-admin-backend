@@ -171,12 +171,22 @@ export async function POST(req: NextRequest) {
 
     // 3. Database transaction to create the Order and OrderItems
     const newOrder = await db.$transaction(async (tx) => {
+      // Get the highest assigned tokenNumber to increment it sequentially
+      const highestTokenOrder = await tx.order.findFirst({
+        where: { tokenNumber: { not: null } },
+        orderBy: { tokenNumber: 'desc' },
+      })
+      const nextToken = highestTokenOrder && highestTokenOrder.tokenNumber 
+        ? highestTokenOrder.tokenNumber + 1 
+        : 1
+
       const order = await tx.order.create({
         data: {
           tableNumber,
           notes: body.notes || body.orderNote || '', // Optional order-level notes
           total: calculatedTotal,
           status: 'NEW',
+          tokenNumber: nextToken,
           items: {
             create: resolvedItems.map((ri) => ({
               menuItemId: ri.menuItemId,

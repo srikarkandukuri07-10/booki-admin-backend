@@ -14,11 +14,14 @@ import {
   ChefHat,
   Monitor
 } from 'lucide-react'
+import { socket } from '@/lib/socket'
 
 export default function KitchenPage() {
   const { orders, isLoading, fetchOrders, updateOrderStatus } = useOrderStore()
   const [kitchenSound, setKitchenSound] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [currentToken, setCurrentToken] = useState<number>(1)
+  const [isUpdatingToken, setIsUpdatingToken] = useState(false)
   
   const [now, setNow] = useState<number | null>(null)
 
@@ -30,6 +33,55 @@ export default function KitchenPage() {
     }, 15000) // Refresh every 15s for exact kitchen timers
     return () => clearInterval(interval)
   }, [fetchOrders])
+
+  // Fetch the current running token on mount, and bind real-time socket events
+  useEffect(() => {
+    const fetchRunningToken = async () => {
+      try {
+        const res = await fetch('/api/token/running')
+        const data = await res.json()
+        if (data.success) {
+          setCurrentToken(data.currentToken)
+        }
+      } catch (err) {
+        console.error('Error fetching running token:', err)
+      }
+    }
+    
+    fetchRunningToken()
+
+    const handleTokenUpdated = (data: { currentToken: number }) => {
+      console.log('📡 Realtime currentToken updated:', data.currentToken)
+      setCurrentToken(data.currentToken)
+    }
+
+    socket.on('current-token-updated', handleTokenUpdated)
+    return () => {
+      socket.off('current-token-updated', handleTokenUpdated)
+    }
+  }, [])
+
+  const updateRunningToken = async (newVal: number) => {
+    if (newVal < 1) return
+    setIsUpdatingToken(true)
+    try {
+      const res = await fetch('/api/token/running', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ currentToken: newVal }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setCurrentToken(newVal)
+      }
+    } catch (err) {
+      console.error('Failed to update running token:', err)
+    } finally {
+      setIsUpdatingToken(false)
+    }
+  }
 
   // Get elapsed minutes since order creation
   const getElapsedMinutes = (createdAtString: string) => {
@@ -59,7 +111,7 @@ export default function KitchenPage() {
   return (
     <div className="space-y-6">
       {/* Top Banner Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/30 pb-5">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-border/30 pb-5">
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-600 text-white shadow-lg">
             <Flame className="h-6 w-6 animate-pulse" />
@@ -74,7 +126,33 @@ export default function KitchenPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Realtime Current Token running controller */}
+          <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-2 px-4 flex items-center gap-3">
+            <span className="text-xs font-black text-orange-600 dark:text-orange-400 uppercase tracking-wider">
+              CURRENT TOKEN RUNNING
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={isUpdatingToken || currentToken <= 1}
+                onClick={() => updateRunningToken(currentToken - 1)}
+                className="w-8 h-8 rounded-xl bg-orange-600 hover:bg-orange-700 text-white flex items-center justify-center font-black cursor-pointer transition-colors active:scale-95 disabled:opacity-40"
+              >
+                -
+              </button>
+              <span className="text-xl font-black text-foreground w-8 text-center font-mono">
+                {currentToken}
+              </span>
+              <button
+                disabled={isUpdatingToken}
+                onClick={() => updateRunningToken(currentToken + 1)}
+                className="w-8 h-8 rounded-xl bg-orange-600 hover:bg-orange-700 text-white flex items-center justify-center font-black cursor-pointer transition-colors active:scale-95 disabled:opacity-40"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
           <button
             onClick={() => setKitchenSound(!kitchenSound)}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer transition-all duration-300 ${
@@ -143,9 +221,16 @@ export default function KitchenPage() {
                 <CardContent className="p-6 space-y-5">
                   {/* Card Header (Table #, Timer, Sequence) */}
                   <div className="flex items-center justify-between border-b border-border/30 pb-3">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-xs font-black text-muted-foreground uppercase">TICKET #{index + 1}</span>
-                      <h2 className="text-3xl font-black tracking-tight text-foreground">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-black text-muted-foreground uppercase">TICKET #{index + 1}</span>
+                        {order.tokenNumber && (
+                          <Badge className="bg-blue-600 dark:bg-blue-500 text-white font-black text-[10px] px-2 py-0.5 rounded-lg">
+                            TOKEN #{order.tokenNumber}
+                          </Badge>
+                        )}
+                      </div>
+                      <h2 className="text-3xl font-black tracking-tight text-foreground mt-1">
                         {order.tableNumber.toLowerCase().includes('table') ? order.tableNumber.toUpperCase() : `TABLE ${order.tableNumber.toUpperCase()}`}
                       </h2>
                     </div>

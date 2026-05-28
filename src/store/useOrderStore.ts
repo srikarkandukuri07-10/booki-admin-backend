@@ -30,6 +30,7 @@ export interface Order {
   status: 'NEW' | 'PREPARING' | 'READY' | 'DELIVERED' | 'CANCELLED'
   total: number
   items: OrderItem[]
+  tokenNumber: number | null
   createdAt: string
   updatedAt: string
 }
