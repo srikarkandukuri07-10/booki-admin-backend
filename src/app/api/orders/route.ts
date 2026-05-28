@@ -216,15 +216,8 @@ export async function POST(req: NextRequest) {
         nextToken = 1
       }
 
-      // Auto-promote current running token from 0 to nextToken if queue was empty
-      const runningTokenSetting = await tx.systemSetting.findUnique({
-        where: { key: 'current_running_token' }
-      })
-      const runningTokenVal = runningTokenSetting && runningTokenSetting.value 
-        ? parseInt(runningTokenSetting.value, 10) 
-        : 0
-
-      if (runningTokenVal === 0) {
+      // Auto-promote current running token to nextToken if queue was empty
+      if (activeOrdersCount === 0) {
         await tx.systemSetting.upsert({
           where: { key: 'current_running_token' },
           update: { value: nextToken.toString() },
