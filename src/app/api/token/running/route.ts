@@ -20,12 +20,59 @@ export async function OPTIONS() {
 // GET handler to fetch the current running token
 export async function GET() {
   try {
-    const setting = await db.systemSetting.findUnique({
-      where: { key: 'current_running_token' }
+    // Check if there are any active orders currently in queue
+    const activeOrdersCount = await db.order.count({
+      where: { status: { in: ['NEW', 'PREPARING', 'READY'] } }
     })
 
-    const tokenVal = setting && setting.value ? parseInt(setting.value, 10) : 0
-    const currentToken = isNaN(tokenVal) ? 0 : tokenVal
+    let currentToken = 0
+
+    if (activeOrdersCount > 0) {
+      // Active orders exist, read the saved setting
+      const setting = await db.systemSetting.findUnique({
+        where: { key: 'current_running_token' }
+      })
+      const tokenVal = setting && setting.value ? parseInt(setting.value, 10) : 0
+      currentToken = isNaN(tokenVal) ? 0 : tokenVal
+    } else {
+      // Queue is empty, check idle duration since the last completed order
+      const lastCompletedOrder = await db.order.findFirst({
+        where: { status: { in: ['DELIVERED', 'CANCELLED'] } },
+        orderBy: { updatedAt: 'desc' }
+      })
+
+      if (lastCompletedOrder) {
+        const completedTime = new Date(lastCompletedOrder.updatedAt).getTime()
+        const nowTime = Date.now()
+        const diffMinutes = (nowTime - completedTime) / 60000
+
+        if (diffMinutes >= 20) {
+          // Idle for at least 20 minutes, reset setting and currentToken to 0
+          currentToken = 0
+          await db.systemSetting.upsert({
+            where: { key: 'current_running_token' },
+            update: { value: '0' },
+            create: { key: 'current_running_token', value: '0' }
+          })
+          
+          // Broadcast the reset event to active sockets in real-time
+          const io = (global as any).io
+          if (io) {
+            io.emit('current-token-updated', { currentToken: 0 })
+          }
+        } else {
+          // Idle for less than 20 minutes, return the saved setting
+          const setting = await db.systemSetting.findUnique({
+            where: { key: 'current_running_token' }
+          })
+          const tokenVal = setting && setting.value ? parseInt(setting.value, 10) : 0
+          currentToken = isNaN(tokenVal) ? 0 : tokenVal
+        }
+      } else {
+        // No orders exist in the database, return 0
+        currentToken = 0
+      }
+    }
 
     return NextResponse.json({ success: true, currentToken }, { headers: CORS_HEADERS })
   } catch (error) {

@@ -171,14 +171,50 @@ export async function POST(req: NextRequest) {
 
     // 3. Database transaction to create the Order and OrderItems
     const newOrder = await db.$transaction(async (tx) => {
+      // Check if there are any active orders in the kitchen queue currently
+      const activeOrdersCount = await tx.order.count({
+        where: { status: { in: ['NEW', 'PREPARING', 'READY'] } }
+      })
+
       // Get the highest assigned tokenNumber to increment it sequentially
       const highestTokenOrder = await tx.order.findFirst({
         where: { tokenNumber: { not: null } },
         orderBy: { tokenNumber: 'desc' },
       })
-      const nextToken = highestTokenOrder && highestTokenOrder.tokenNumber 
-        ? highestTokenOrder.tokenNumber + 1 
-        : 1
+
+      let nextToken = 1
+
+      if (activeOrdersCount > 0 && highestTokenOrder && highestTokenOrder.tokenNumber) {
+        // Active orders exist, continue incrementing sequentially
+        nextToken = highestTokenOrder.tokenNumber + 1
+      } else if (highestTokenOrder && highestTokenOrder.tokenNumber) {
+        // Queue was empty, check if it has been idle for >= 20 minutes
+        const lastCompletedOrder = await tx.order.findFirst({
+          where: { status: { in: ['DELIVERED', 'CANCELLED'] } },
+          orderBy: { updatedAt: 'desc' }
+        })
+
+        if (lastCompletedOrder) {
+          const completedTime = new Date(lastCompletedOrder.updatedAt).getTime()
+          const nowTime = Date.now()
+          const diffMinutes = (nowTime - completedTime) / 60000
+
+          if (diffMinutes >= 20) {
+            // Idle for 20+ minutes, restart token system back to 0! (So next token is 1)
+            nextToken = 1
+            console.log(`⏳ System idle for ${diffMinutes.toFixed(1)}m (>= 20m). Restarting token queue from 0.`)
+          } else {
+            // Idle for less than 20 minutes, continue incrementing
+            nextToken = highestTokenOrder.tokenNumber + 1
+          }
+        } else {
+          // No completed orders, increment from highest
+          nextToken = highestTokenOrder.tokenNumber + 1
+        }
+      } else {
+        // No orders exist in database, start at 1
+        nextToken = 1
+      }
 
       // Auto-promote current running token from 0 to nextToken if queue was empty
       const runningTokenSetting = await tx.systemSetting.findUnique({
