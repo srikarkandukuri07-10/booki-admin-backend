@@ -219,8 +219,8 @@ export async function POST(req: NextRequest) {
             nextToken = highestTokenOrder.tokenNumber + 1
           }
         } else {
-          // No completed orders, increment from highest
-          nextToken = highestTokenOrder.tokenNumber + 1
+          // No completed orders exist, start fresh at 1!
+          nextToken = 1
         }
       } else {
         // No orders exist in database, start at 1

@@ -118,8 +118,8 @@ export async function PATCH(req: NextRequest, { params }: Props) {
         io.emit('current-token-updated', { currentToken: updatedOrder.tokenNumber })
       }
       console.log(`📡 Realtime Socket Event: 'current-token-updated' set to #${updatedOrder.tokenNumber} (Preparing order)`)
-    } else if (status === 'DELIVERED' || status === 'READY') {
-      // Chef finished preparing this order, find the next one in the queue
+    } else if (status === 'DELIVERED' || status === 'READY' || status === 'CANCELLED') {
+      // Chef finished preparing, delivered, or cancelled this order, find the next one in the queue
       const nextActiveOrder = await db.order.findFirst({
         where: {
           status: { in: ['NEW', 'PREPARING'] },
@@ -137,6 +137,30 @@ export async function PATCH(req: NextRequest, { params }: Props) {
           io.emit('current-token-updated', { currentToken: nextActiveOrder.tokenNumber })
         }
         console.log(`📡 Realtime Socket Event: 'current-token-updated' set to #${nextActiveOrder.tokenNumber} (Next in queue)`)
+      } else {
+        // Queue is now empty! Start a 1-minute timeout to reset the token system back to 0!
+        setTimeout(async () => {
+          try {
+            // Check if there are still no active orders in the database currently
+            const currentActiveOrders = await db.order.count({
+              where: { status: { in: ['NEW', 'PREPARING', 'READY'] } }
+            })
+            if (currentActiveOrders === 0) {
+              await db.systemSetting.upsert({
+                where: { key: 'current_running_token' },
+                update: { value: '0' },
+                create: { key: 'current_running_token', value: '0' }
+              })
+              const currentIo = (global as any).io
+              if (currentIo) {
+                currentIo.emit('current-token-updated', { currentToken: 0 })
+              }
+              console.log('⏳ Timeout: 1 minute of empty queue reached. Stored token reset to 0.')
+            }
+          } catch (err) {
+            console.error('Error in 1-minute idle reset timeout:', err)
+          }
+        }, 60000) // 1 minute (60,000 milliseconds)
       }
     }
 
